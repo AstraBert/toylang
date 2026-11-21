@@ -1,0 +1,7 @@
+program  := line*
+line     := expr? NEWLINE
+expr     := term (('+' | '-') term)*
+term     := unary (('*' | '/' | '//' | '%') unary)*
+unary    := '-' unary | power
+power    := atom ('**' unary)?
+atom     := INT | FLOAT | '(' expr ')'
