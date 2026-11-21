@@ -1,0 +1,49 @@
+# Covers: tl_pow_float
+# Expected output (2.0**0.5, 2.0**3.0, 2.0**-1.0, 0.0**0.0, 0.0**2.0, (-2.0)**3.0):
+# 1.4142135623730951
+# 8.0
+# 0.5
+# 1.0
+# 0.0
+# -8.0
+export function w $main() {
+@start
+    # 2.0 ** 0.5
+    %a1 =d copy d_2.0
+    %b1 =d copy d_0.5
+    %r1 =d call $tl_pow_float(d %a1, d %b1)
+    call $tl_print_float(d %r1)
+
+    # 2.0 ** 3.0
+    %a2 =d copy d_2.0
+    %b2 =d copy d_3.0
+    %r2 =d call $tl_pow_float(d %a2, d %b2)
+    call $tl_print_float(d %r2)
+
+    # 2.0 ** -1.0
+    %a3 =d copy d_2.0
+    %p3 =d copy d_1.0
+    %b3 =d neg %p3
+    %r3 =d call $tl_pow_float(d %a3, d %b3)
+    call $tl_print_float(d %r3)
+
+    # 0.0 ** 0.0
+    %a4 =d copy d_0.0
+    %b4 =d copy d_0.0
+    %r4 =d call $tl_pow_float(d %a4, d %b4)
+    call $tl_print_float(d %r4)
+
+    # 0.0 ** 2.0
+    %a5 =d copy d_0.0
+    %b5 =d copy d_2.0
+    %r5 =d call $tl_pow_float(d %a5, d %b5)
+    call $tl_print_float(d %r5)
+
+    # (-2.0) ** 3.0
+    %p6 =d copy d_2.0
+    %a6 =d neg %p6
+    %b6 =d copy d_3.0
+    %r6 =d call $tl_pow_float(d %a6, d %b6)
+    call $tl_print_float(d %r6)
+    ret 0
+}

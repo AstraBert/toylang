@@ -1,0 +1,15 @@
+# Covers: tl_mod_int with a zero divisor (1 % 0)
+# Expected: prints 99, then an error message on stderr, exit code 1 (check with: echo $?)
+# 100 must NEVER be printed.
+export function w $main() {
+@start
+    %t1 =l copy 99
+    call $tl_print_int(l %t1)
+    %a =l copy 1
+    %b =l copy 0
+    %r =l call $tl_mod_int(l %a, l %b)
+    call $tl_print_int(l %r)
+    %t2 =l copy 100
+    call $tl_print_int(l %t2)
+    ret 0
+}
