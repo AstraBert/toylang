@@ -34,7 +34,7 @@ for s in "$dir"/*.ssa; do
         fail=$((fail + 1))
         continue
     fi
-    if ! cc -o "$dir/out.toyx" "$dir/out.s" "$runtime" "$libs"; then
+    if ! cc -o "$dir/out.toyx" "$dir/out.s" "$runtime" $libs; then
         echo "FAIL $name (cc failed)"
         fail=$((fail + 1))
         rm -f "$dir/out.s"
