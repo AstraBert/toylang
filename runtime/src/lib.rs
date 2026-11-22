@@ -68,7 +68,7 @@ pub extern "C" fn tl_pow_int(i: i64, m: i64) -> i64 {
 
     match m {
         0 => 1,
-        _ => i * tl_pow_int(i, m - 1),
+        _ => i.wrapping_mul(tl_pow_int(i, m - 1)),
     }
 }
 

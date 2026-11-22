@@ -3,6 +3,7 @@ import gleam/int
 import gleam/io
 import gleam/list
 import simplifile
+import toylang/compiler
 import toylang/interpreter
 import toylang/lexer
 import toylang/parser
@@ -14,56 +15,65 @@ pub fn main() -> Nil {
   case args.arguments {
     [] -> {
       io.println_error(
-        "You need to provide a flag (--version/--help) or the path to the ToyLang file to execute",
+        "You need to provide a flag (--version/--help) or a command (`run`, `build`) the path to the ToyLang file to execute",
       )
     }
-    [first, ..] -> {
+    [first] -> {
       case first {
-        "--help" ->
+        "--version" -> {
+          io.println("toylang v" <> version)
+        }
+        "--help" -> {
           io.println(
-            "Execute a ToyLang script by providing its path. Prints the values to which each expression in the script evaluates.",
+            "Run or compile a ToyLang file\nCommands:\n\trun <PATH>: run a file using the ToyLang interpreter\n\tbuild <PATH> [<OUT>]: compile a file to .ssa file containing QBE IL (use build.sh to compile to native binary with qbe, the runtime and cc)\n\nRun `toylang --version` to see the version of the language you are running on\nRun `toylang --help` to display this message again\n",
           )
-        "--version" -> io.println("toylang v" <> version)
+        }
         _ -> {
-          let res = simplifile.read(first)
-          case res {
+          io.println_error("Unrecognized flag or command: " <> first)
+        }
+      }
+    }
+    [first, second, ..rest] -> {
+      let res = simplifile.read(second)
+      case res {
+        Error(e) -> {
+          e |> simplifile.describe_error |> io.println_error
+        }
+        Ok(source) -> {
+          let tok_res = lexer.lex(source)
+          case tok_res {
             Error(e) -> {
-              e |> simplifile.describe_error |> io.println_error
+              io.println_error(
+                "Lexing Error: "
+                <> e.message
+                <> "(line: "
+                <> int.to_string(e.line)
+                <> ", col: "
+                <> int.to_string(e.col)
+                <> ")",
+              )
             }
-            Ok(source) -> {
-              let tok_res = lexer.lex(source)
-              case tok_res {
+            Ok(toks) -> {
+              let expr_res = parser.parse_program(toks, [])
+              case expr_res {
                 Error(e) -> {
-                  io.println_error(
-                    "Lexing Error: "
-                    <> e.message
-                    <> "(line: "
-                    <> int.to_string(e.line)
-                    <> ", col: "
-                    <> int.to_string(e.col)
-                    <> ")",
-                  )
+                  case e {
+                    parser.Parsing(message, line, col) ->
+                      io.println_error(
+                        "Parsing Error: "
+                        <> message
+                        <> "(line: "
+                        <> int.to_string(line)
+                        <> ", col: "
+                        <> int.to_string(col)
+                        <> ")",
+                      )
+                    parser.Empty -> io.println("Unexpected empty tokens list")
+                  }
                 }
-                Ok(toks) -> {
-                  let expr_res = parser.parse_program(toks, [])
-                  case expr_res {
-                    Error(e) -> {
-                      case e {
-                        parser.Parsing(message, line, col) ->
-                          io.println_error(
-                            "Parsing Error: "
-                            <> message
-                            <> "(line: "
-                            <> int.to_string(line)
-                            <> ", col: "
-                            <> int.to_string(col)
-                            <> ")",
-                          )
-                        parser.Empty ->
-                          io.println("Unexpected empty tokens list")
-                      }
-                    }
-                    Ok(exprs) -> {
+                Ok(exprs) -> {
+                  case first {
+                    "run" -> {
                       let int_res = interpreter.eval_program(exprs)
                       case int_res {
                         Error(e) -> {
@@ -76,6 +86,26 @@ pub fn main() -> Nil {
                           })
                         }
                       }
+                    }
+                    "build" -> {
+                      let compiled = compiler.compile_program(exprs)
+                      let out_file = case list.first(rest) {
+                        Error(Nil) -> "out.s"
+                        Ok(s) -> s
+                      }
+                      let resw = simplifile.write(out_file, compiled)
+                      case resw {
+                        Error(e) ->
+                          io.println_error(
+                            "An error occurred when writing the .ssa file: "
+                            <> simplifile.describe_error(e),
+                          )
+                        Ok(_) ->
+                          io.println("Saved QBE IL output to " <> out_file)
+                      }
+                    }
+                    _ -> {
+                      io.println_error("Unknown command: " <> first)
                     }
                   }
                 }
