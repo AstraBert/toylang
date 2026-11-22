@@ -1,0 +1,9 @@
+program    := stmt*
+stmt       := (let_stmt | func_def | expr)? NEWLINE
+let_stmt   := 'let' IDENT '=' expr
+func_def   := 'let' IDENT '=' 'fn' '(' params? ')' block
+params     := param (',' param)*
+param      := IDENT ':' TYPE
+block      := '{' NEWLINE* (let_stmt NEWLINE+)* expr NEWLINE* '}'
+atom       := INT | FLOAT | IDENT | IDENT '(' args? ')' | '(' expr ')'
+args       := expr (',' expr)*

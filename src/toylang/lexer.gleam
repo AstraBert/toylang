@@ -1,10 +1,75 @@
 import gleam/float
 import gleam/int
 import gleam/list
+import gleam/result
 import gleam/string
+
+const letters: List(String) = [
+  "a",
+  "b",
+  "c",
+  "d",
+  "e",
+  "f",
+  "g",
+  "h",
+  "i",
+  "j",
+  "k",
+  "l",
+  "m",
+  "n",
+  "o",
+  "p",
+  "q",
+  "r",
+  "s",
+  "t",
+  "u",
+  "v",
+  "w",
+  "x",
+  "y",
+  "z",
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "I",
+  "J",
+  "K",
+  "L",
+  "M",
+  "N",
+  "O",
+  "P",
+  "Q",
+  "R",
+  "S",
+  "T",
+  "U",
+  "V",
+  "W",
+  "X",
+  "Y",
+  "Z",
+]
+
+const digits: List(String) = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
 /// Token kind for ToyLang.
 pub type TokenKind {
+  /// `let` keyword for immutable
+  /// variable assignment
+  Let
+  /// Identifier for a variable
+  Ident(String)
+  /// = (assignment operator)
+  Eq
   /// integer
   IntNum(Int)
   /// float
@@ -48,6 +113,9 @@ pub fn to_string(kind: TokenKind) -> String {
     StarStar -> "**"
     IntNum(n) -> int.to_string(n)
     FloatNum(n) -> float.to_string(n)
+    Eq -> "="
+    Let -> "'let'"
+    Ident(x) -> "variable '" <> x <> "'"
   }
 }
 
@@ -78,8 +146,23 @@ pub fn lex(source: String) -> Result(List(Token), LexError) {
 }
 
 fn is_digit(s: String) -> Bool {
-  case s {
-    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" -> True
+  digits |> list.contains(s)
+}
+
+fn is_letter_or_underscore(s: String) -> Bool {
+  letters |> list.contains(s) || s == "_"
+}
+
+pub fn is_valid_variable_name(chars: List(String)) -> Bool {
+  case chars {
+    [first, ..rest] -> {
+      case is_letter_or_underscore(first) {
+        True -> {
+          rest |> list.all(fn(x) { is_digit(x) || is_letter_or_underscore(x) })
+        }
+        False -> False
+      }
+    }
     _ -> False
   }
 }
@@ -105,15 +188,9 @@ pub fn scan(
           scan(rest, line + 1, 1, tokens)
         }
         "#" -> {
-          let remaining =
-            rest
-            |> list.index_map(fn(x, i) { #(i, x) })
-            |> list.drop_while(fn(x) { x.1 != "\n" })
-          case remaining {
-            [] -> scan(list.map(remaining, fn(x) { x.1 }), line + 1, 1, tokens)
-            [first, ..] ->
-              scan(list.map(remaining, fn(x) { x.1 }), line, first.0, tokens)
-          }
+          let #(skipped, remaining) =
+            rest |> list.split_while(fn(x) { x != "\n" && x != "\r\n" })
+          scan(remaining, line, col + list.length(skipped) + 1, tokens)
         }
         "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" -> {
           let res = read_number(chars, line, col)
@@ -155,26 +232,71 @@ pub fn scan(
             }
           }
         }
-        "+" | "-" | "%" | "(" | ")" -> {
+        "+" | "-" | "%" | "(" | ")" | "=" -> {
           let token = case first {
             "+" -> Token(kind: Plus, line: line, col: col)
             "-" -> Token(kind: Minus, line: line, col: col)
             "%" -> Token(kind: Percent, line: line, col: col)
             "(" -> Token(kind: LParen, line: line, col: col)
+            "=" -> Token(kind: Eq, line: line, col: col)
             _ -> Token(kind: RParen, line: line, col: col)
           }
           let tokens = [token, ..tokens]
           scan(rest, line, col + 1, tokens)
         }
         _ -> {
-          Error(LexError(
-            message: "Unexpected character: " <> first,
-            line: line,
-            col: col,
-          ))
+          // variables can only start with letter
+          // or underscore
+          case is_letter_or_underscore(first) {
+            False ->
+              Error(LexError(
+                message: "Unexpected character: " <> first,
+                line: line,
+                col: col,
+              ))
+            True -> {
+              use #(tok, other, col_diff) <- result.try(read_word(
+                chars,
+                line,
+                col,
+              ))
+              let tokens = [tok, ..tokens]
+              scan(other, line, col + col_diff, tokens)
+            }
+          }
         }
       }
     }
+  }
+}
+
+pub fn read_word(
+  chars: List(String),
+  line: Int,
+  col: Int,
+) -> Result(#(Token, List(String), Int), LexError) {
+  let #(word, rest) =
+    chars
+    |> list.split_while(fn(x) { is_digit(x) || is_letter_or_underscore(x) })
+  case is_valid_variable_name(word) {
+    True -> {
+      case word == ["l", "e", "t"] {
+        False ->
+          Ok(#(
+            Token(kind: Ident(word |> string.concat), line: line, col: col),
+            rest,
+            list.length(word),
+          ))
+        True ->
+          Ok(#(Token(kind: Let, line: line, col: col), rest, list.length(word)))
+      }
+    }
+    False ->
+      Error(LexError(
+        message: "Invalid variable name: " <> word |> string.concat,
+        line: line,
+        col: col,
+      ))
   }
 }
 

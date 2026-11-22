@@ -13,7 +13,7 @@ case "$(uname)" in
 esac
 
 qbe -o tmp.s $SSA_FILE
-cc -o $OUT_FILE tmp.s $RUNTIME_LIB "$libs"
+cc -o $OUT_FILE tmp.s $RUNTIME_LIB $libs
 
 if [[ "$DELETE_SSA" == "--delete-ssa" ]]
 then

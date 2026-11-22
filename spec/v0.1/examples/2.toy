@@ -1,0 +1,8 @@
+let area = fn(w: Int, h: Float) {
+    let a = w * h
+    a
+}
+area(x, 2)                     # prints 10.0
+
+let double = fn(n: Int) { n * 2 }
+double(double(2))              # prints 8

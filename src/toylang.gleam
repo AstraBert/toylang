@@ -8,7 +8,7 @@ import toylang/interpreter
 import toylang/lexer
 import toylang/parser
 
-const version: String = "0.0.0"
+const version: String = "0.1.0"
 
 pub fn main() -> Nil {
   let args = argv.load()
