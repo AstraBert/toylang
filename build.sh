@@ -7,8 +7,13 @@ OUT_FILE="${2:?usage: $0 <input.ssa> <output> [--delete-ssa]}"
 DELETE_SSA="${3:---no-delete-ssa}"
 RUNTIME_LIB="${RUNTIME_PATH:-$(pwd)/runtime/target/release/libruntime.a}"
 
+case "$(uname)" in
+    Darwin) libs="-lm" ;;
+    *)      libs="-lm -lpthread -ldl" ;;
+esac
+
 qbe -o tmp.s $SSA_FILE
-cc -o $OUT_FILE tmp.s $RUNTIME_LIB
+cc -o $OUT_FILE tmp.s $RUNTIME_LIB "$libs"
 
 if [[ "$DELETE_SSA" == "--delete-ssa" ]]
 then

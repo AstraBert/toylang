@@ -6,6 +6,11 @@ pass=0
 fail=0
 rebuild=$1
 
+case "$(uname)" in
+    Darwin) libs="-lm" ;;
+    *)      libs="-lm -lpthread -ldl" ;;
+esac
+
 if [[ "$rebuild" == "--rebuild" ]]
 then
     cargo build --release
@@ -29,7 +34,7 @@ for s in "$dir"/*.ssa; do
         fail=$((fail + 1))
         continue
     fi
-    if ! cc -o "$dir/out.toyx" "$dir/out.s" "$runtime"; then
+    if ! cc -o "$dir/out.toyx" "$dir/out.s" "$runtime" "$libs"; then
         echo "FAIL $name (cc failed)"
         fail=$((fail + 1))
         rm -f "$dir/out.s"
