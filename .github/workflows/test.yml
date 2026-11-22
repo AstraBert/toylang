@@ -40,7 +40,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install system dependencies
-        run: apt update && apt install -y qbe build-essential
+        run: sudo apt update && sudo apt install -y qbe build-essential
 
       - name: Build runtime library
         run: cargo build --release
