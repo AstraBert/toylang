@@ -1,0 +1,35 @@
+# Covers: tl_floordiv_float
+# Expected output (7.0//2.0, -7.0//2.0, 7.5//2.0, 7.0//-2.0):
+# 3.0
+# -4.0
+# 3.0
+# -4.0
+export function w $main() {
+@start
+    # 7.0 // 2.0
+    %a1 =d copy d_7.0
+    %b1 =d copy d_2.0
+    %r1 =d call $tl_floordiv_float(d %a1, d %b1)
+    call $tl_print_float(d %r1)
+
+    # -7.0 // 2.0
+    %p2 =d copy d_7.0
+    %a2 =d neg %p2
+    %b2 =d copy d_2.0
+    %r2 =d call $tl_floordiv_float(d %a2, d %b2)
+    call $tl_print_float(d %r2)
+
+    # 7.5 // 2.0
+    %a3 =d copy d_7.5
+    %b3 =d copy d_2.0
+    %r3 =d call $tl_floordiv_float(d %a3, d %b3)
+    call $tl_print_float(d %r3)
+
+    # 7.0 // -2.0
+    %a4 =d copy d_7.0
+    %p4 =d copy d_2.0
+    %b4 =d neg %p4
+    %r4 =d call $tl_floordiv_float(d %a4, d %b4)
+    call $tl_print_float(d %r4)
+    ret 0
+}

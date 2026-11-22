@@ -3,20 +3,38 @@ import gleam/int
 import gleam/io
 import gleam/list
 import simplifile
+import toylang/compiler
 import toylang/interpreter
 import toylang/lexer
 import toylang/parser
+
+const version: String = "0.0.0"
 
 pub fn main() -> Nil {
   let args = argv.load()
   case args.arguments {
     [] -> {
       io.println_error(
-        "You need to provide the path to the ToyLang file to execute",
+        "You need to provide a flag (--version/--help) or a command (`run`, `build`) the path to the ToyLang file to execute",
       )
     }
-    [first, ..] -> {
-      let res = simplifile.read(first)
+    [first] -> {
+      case first {
+        "--version" -> {
+          io.println("toylang v" <> version)
+        }
+        "--help" -> {
+          io.println(
+            "Run or compile a ToyLang file\nCommands:\n\trun <PATH>: run a file using the ToyLang interpreter\n\tbuild <PATH> [<OUT>]: compile a file to .ssa file containing QBE IL (use build.sh to compile to native binary with qbe, the runtime and cc)\n\nRun `toylang --version` to see the version of the language you are running on\nRun `toylang --help` to display this message again\n",
+          )
+        }
+        _ -> {
+          io.println_error("Unrecognized flag or command: " <> first)
+        }
+      }
+    }
+    [first, second, ..rest] -> {
+      let res = simplifile.read(second)
       case res {
         Error(e) -> {
           e |> simplifile.describe_error |> io.println_error
@@ -54,16 +72,40 @@ pub fn main() -> Nil {
                   }
                 }
                 Ok(exprs) -> {
-                  let int_res = interpreter.eval_program(exprs)
-                  case int_res {
-                    Error(e) -> {
-                      io.println_error("Eval error: " <> e.message)
+                  case first {
+                    "run" -> {
+                      let int_res = interpreter.eval_program(exprs)
+                      case int_res {
+                        Error(e) -> {
+                          io.println_error("Eval error: " <> e.message)
+                        }
+                        Ok(vals) -> {
+                          vals
+                          |> list.each(fn(x) {
+                            x |> interpreter.to_string |> io.println
+                          })
+                        }
+                      }
                     }
-                    Ok(vals) -> {
-                      vals
-                      |> list.each(fn(x) {
-                        x |> interpreter.to_string |> io.println
-                      })
+                    "build" -> {
+                      let compiled = compiler.compile_program(exprs)
+                      let out_file = case list.first(rest) {
+                        Error(Nil) -> "out.s"
+                        Ok(s) -> s
+                      }
+                      let resw = simplifile.write(out_file, compiled)
+                      case resw {
+                        Error(e) ->
+                          io.println_error(
+                            "An error occurred when writing the .ssa file: "
+                            <> simplifile.describe_error(e),
+                          )
+                        Ok(_) ->
+                          io.println("Saved QBE IL output to " <> out_file)
+                      }
+                    }
+                    _ -> {
+                      io.println_error("Unknown command: " <> first)
                     }
                   }
                 }

@@ -1,0 +1,78 @@
+# Covers: tl_pow_int
+# Expected output (2**10, 0**0, 0**5, 5**0, 3**4, (-2)**3, (-2)**2, 2**62, 2**63, 2**64):
+# 1024
+# 1
+# 0
+# 1
+# 81
+# -8
+# 4
+# 4611686018427387904
+# -9223372036854775808
+# 0
+# (the last two wrap around: ints are 64-bit in the compiled program)
+export function w $main() {
+@start
+    # 2 ** 10
+    %a1 =l copy 2
+    %b1 =l copy 10
+    %r1 =l call $tl_pow_int(l %a1, l %b1)
+    call $tl_print_int(l %r1)
+
+    # 0 ** 0
+    %a2 =l copy 0
+    %b2 =l copy 0
+    %r2 =l call $tl_pow_int(l %a2, l %b2)
+    call $tl_print_int(l %r2)
+
+    # 0 ** 5
+    %a3 =l copy 0
+    %b3 =l copy 5
+    %r3 =l call $tl_pow_int(l %a3, l %b3)
+    call $tl_print_int(l %r3)
+
+    # 5 ** 0
+    %a4 =l copy 5
+    %b4 =l copy 0
+    %r4 =l call $tl_pow_int(l %a4, l %b4)
+    call $tl_print_int(l %r4)
+
+    # 3 ** 4
+    %a5 =l copy 3
+    %b5 =l copy 4
+    %r5 =l call $tl_pow_int(l %a5, l %b5)
+    call $tl_print_int(l %r5)
+
+    # (-2) ** 3
+    %p6 =l copy 2
+    %a6 =l neg %p6
+    %b6 =l copy 3
+    %r6 =l call $tl_pow_int(l %a6, l %b6)
+    call $tl_print_int(l %r6)
+
+    # (-2) ** 2
+    %p7 =l copy 2
+    %a7 =l neg %p7
+    %b7 =l copy 2
+    %r7 =l call $tl_pow_int(l %a7, l %b7)
+    call $tl_print_int(l %r7)
+
+    # 2 ** 62
+    %a8 =l copy 2
+    %b8 =l copy 62
+    %r8 =l call $tl_pow_int(l %a8, l %b8)
+    call $tl_print_int(l %r8)
+
+    # 2 ** 63 (wraps)
+    %a9 =l copy 2
+    %b9 =l copy 63
+    %r9 =l call $tl_pow_int(l %a9, l %b9)
+    call $tl_print_int(l %r9)
+
+    # 2 ** 64 (wraps)
+    %a10 =l copy 2
+    %b10 =l copy 64
+    %r10 =l call $tl_pow_int(l %a10, l %b10)
+    call $tl_print_int(l %r10)
+    ret 0
+}

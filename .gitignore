@@ -4,3 +4,5 @@
 erl_crash.dump
 toylang
 !src/toylang/
+*.ssa
+*.toyx

@@ -1,0 +1,22 @@
+# Covers: tl_print_int, tl_print_float
+# Expected output:
+# 42
+# -5
+# 3.5
+# 2.0
+# 0.1
+export function w $main() {
+@start
+    %t1 =l copy 42
+    call $tl_print_int(l %t1)
+    %t2 =l copy 5
+    %t3 =l neg %t2
+    call $tl_print_int(l %t3)
+    %t4 =d copy d_3.5
+    call $tl_print_float(d %t4)
+    %t5 =d copy d_2.0
+    call $tl_print_float(d %t5)
+    %t6 =d copy d_0.1
+    call $tl_print_float(d %t6)
+    ret 0
+}

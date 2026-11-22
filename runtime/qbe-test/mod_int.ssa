@@ -1,0 +1,59 @@
+# Covers: tl_mod_int
+# Expected output (7%3, -7%3, 7%-3, -7%-3, 6%3, -6%3, 0%5):
+# 1
+# 2
+# -2
+# -1
+# 0
+# 0
+# 0
+export function w $main() {
+@start
+    # 7 % 3
+    %a1 =l copy 7
+    %b1 =l copy 3
+    %r1 =l call $tl_mod_int(l %a1, l %b1)
+    call $tl_print_int(l %r1)
+
+    # -7 % 3
+    %p2 =l copy 7
+    %a2 =l neg %p2
+    %b2 =l copy 3
+    %r2 =l call $tl_mod_int(l %a2, l %b2)
+    call $tl_print_int(l %r2)
+
+    # 7 % -3
+    %a3 =l copy 7
+    %p3 =l copy 3
+    %b3 =l neg %p3
+    %r3 =l call $tl_mod_int(l %a3, l %b3)
+    call $tl_print_int(l %r3)
+
+    # -7 % -3
+    %p4 =l copy 7
+    %a4 =l neg %p4
+    %q4 =l copy 3
+    %b4 =l neg %q4
+    %r4 =l call $tl_mod_int(l %a4, l %b4)
+    call $tl_print_int(l %r4)
+
+    # 6 % 3
+    %a5 =l copy 6
+    %b5 =l copy 3
+    %r5 =l call $tl_mod_int(l %a5, l %b5)
+    call $tl_print_int(l %r5)
+
+    # -6 % 3
+    %p6 =l copy 6
+    %a6 =l neg %p6
+    %b6 =l copy 3
+    %r6 =l call $tl_mod_int(l %a6, l %b6)
+    call $tl_print_int(l %r6)
+
+    # 0 % 5
+    %a7 =l copy 0
+    %b7 =l copy 5
+    %r7 =l call $tl_mod_int(l %a7, l %b7)
+    call $tl_print_int(l %r7)
+    ret 0
+}

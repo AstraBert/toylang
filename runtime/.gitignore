@@ -1,0 +1,3 @@
+target/
+qbe-test/*.s
+qbe-test/*.toyx

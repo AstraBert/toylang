@@ -1,0 +1,43 @@
+# Covers: tl_mod_float
+# Expected output (7.5%2.0, -7.5%2.0, 7.5%-2.0, 6.0%3.0, -6.0%3.0):
+# 1.5
+# 0.5
+# -0.5
+# 0.0
+# 0.0
+export function w $main() {
+@start
+    # 7.5 % 2.0
+    %a1 =d copy d_7.5
+    %b1 =d copy d_2.0
+    %r1 =d call $tl_mod_float(d %a1, d %b1)
+    call $tl_print_float(d %r1)
+
+    # -7.5 % 2.0
+    %p2 =d copy d_7.5
+    %a2 =d neg %p2
+    %b2 =d copy d_2.0
+    %r2 =d call $tl_mod_float(d %a2, d %b2)
+    call $tl_print_float(d %r2)
+
+    # 7.5 % -2.0
+    %a3 =d copy d_7.5
+    %p3 =d copy d_2.0
+    %b3 =d neg %p3
+    %r3 =d call $tl_mod_float(d %a3, d %b3)
+    call $tl_print_float(d %r3)
+
+    # 6.0 % 3.0
+    %a4 =d copy d_6.0
+    %b4 =d copy d_3.0
+    %r4 =d call $tl_mod_float(d %a4, d %b4)
+    call $tl_print_float(d %r4)
+
+    # -6.0 % 3.0
+    %p5 =d copy d_6.0
+    %a5 =d neg %p5
+    %b5 =d copy d_3.0
+    %r5 =d call $tl_mod_float(d %a5, d %b5)
+    call $tl_print_float(d %r5)
+    ret 0
+}
