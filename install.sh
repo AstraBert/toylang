@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs toylang from a GitHub release.
 #
-#   curl -fsSL https://github.com/AstraBert/toylang/releases/latest/download/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/AstraBert/toylang/main/install.sh | sh
 #   curl -fsSL .../install.sh | sh -s -- --version 0.1.0
 #   curl -fsSL .../install.sh | sh -s -- --uninstall
 #
@@ -153,7 +153,10 @@ install() {
   rm -rf "$TOYLANG_HOME/$name"
   mv "$tmp/$name" "$TOYLANG_HOME/$name"
   chmod +x "$TOYLANG_HOME/$name/toylang"
+  chmod +x "$TOYLANG_HOME/$name/toylang.escript"
+  chmod +x "$TOYLANG_HOME/$name/build.sh"
   ln -sfn "$TOYLANG_HOME/$name" "$TOYLANG_HOME/current"
+  chmod +x "$TOYLANG_HOME/current/toylang"
 
   # Keep only the version we just installed.
   for d in "$TOYLANG_HOME"/toylang-*; do
