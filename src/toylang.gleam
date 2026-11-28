@@ -1,4 +1,5 @@
 import argv
+import gleam/dict
 import gleam/int
 import gleam/io
 import gleam/list
@@ -74,7 +75,9 @@ pub fn main() -> Nil {
                 Ok(exprs) -> {
                   case first {
                     "run" -> {
-                      let int_res = interpreter.eval_program(exprs)
+                      let env: interpreter.Env = dict.new()
+                      let vals: List(interpreter.RunValue) = []
+                      let int_res = interpreter.eval_program(exprs, env, vals)
                       case int_res {
                         Error(e) -> {
                           io.println_error("Eval error: " <> e.message)
@@ -89,19 +92,26 @@ pub fn main() -> Nil {
                     }
                     "build" -> {
                       let compiled = compiler.compile_program(exprs)
-                      let out_file = case list.first(rest) {
-                        Error(Nil) -> "out.s"
-                        Ok(s) -> s
-                      }
-                      let resw = simplifile.write(out_file, compiled)
-                      case resw {
-                        Error(e) ->
-                          io.println_error(
-                            "An error occurred when writing the .ssa file: "
-                            <> simplifile.describe_error(e),
-                          )
-                        Ok(_) ->
-                          io.println("Saved QBE IL output to " <> out_file)
+                      case compiled {
+                        Ok(s) -> {
+                          let out_file = case list.first(rest) {
+                            Error(Nil) -> "out.s"
+                            Ok(s) -> s
+                          }
+                          let resw = simplifile.write(out_file, s)
+                          case resw {
+                            Error(e) ->
+                              io.println_error(
+                                "An error occurred when writing the .ssa file: "
+                                <> simplifile.describe_error(e),
+                              )
+                            Ok(_) ->
+                              io.println("Saved QBE IL output to " <> out_file)
+                          }
+                        }
+                        Error(e) -> {
+                          io.println_error("Compilation error: " <> e.message)
+                        }
                       }
                     }
                     _ -> {

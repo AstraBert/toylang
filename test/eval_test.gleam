@@ -1,29 +1,41 @@
+import gleam/dict
 import gleam/float
+import toylang/checker
 import toylang/interpreter.{FloatValue, IntValue}
 import toylang/lexer
 import toylang/parser
 
 // ---------- helpers (the only place that knows your function names) ----------
 
-// Lex + parse + eval a whole program, expecting success.
+// Lex + parse + check + eval a whole program, expecting success.
+// (The checker runs first, as it will in the real pipeline, so every test
+// program is also known to be valid. Delete that line if you prefer.)
 fn run(source: String) -> List(interpreter.RunValue) {
   let assert Ok(tokens) = lexer.lex(source)
-  let assert Ok(exprs) = parser.parse_program(tokens, [])
-  let assert Ok(values) = interpreter.eval_program(exprs)
+  let assert Ok(stmts) = parser.parse_program(tokens, [])
+  let env: checker.Env = dict.new()
+  let assert Ok(_) = checker.check_program(stmts, env)
+  let var_env: interpreter.Env = dict.new()
+  let vals: List(interpreter.RunValue) = []
+  let assert Ok(values) = interpreter.eval_program(stmts, var_env, vals)
   values
 }
 
-// Run a program that must contain exactly one expression.
+// Run a program that must produce exactly one value.
 fn value(source: String) -> interpreter.RunValue {
   let assert [v] = run(source)
   v
 }
 
-// True when evaluating the program fails (lexing and parsing must succeed).
+// True when evaluating the program fails (lexing, parsing and checking must succeed).
 fn is_error(source: String) -> Bool {
   let assert Ok(tokens) = lexer.lex(source)
-  let assert Ok(exprs) = parser.parse_program(tokens, [])
-  case interpreter.eval_program(exprs) {
+  let assert Ok(stmts) = parser.parse_program(tokens, [])
+  let env: checker.Env = dict.new()
+  let assert Ok(_) = checker.check_program(stmts, env)
+  let var_env: interpreter.Env = dict.new()
+  let vals: List(interpreter.RunValue) = []
+  case interpreter.eval_program(stmts, var_env, vals) {
     Ok(_) -> False
     Error(_) -> True
   }
@@ -34,6 +46,8 @@ fn assert_close(source: String, expected: Float) -> Nil {
   let assert FloatValue(actual) = value(source)
   assert float.absolute_value(actual -. expected) <. 0.000001
 }
+
+// ======================= v0: programs without variables =======================
 
 // ---------- literals and negation ----------
 
@@ -208,7 +222,7 @@ pub fn big_power_stays_exact_test() {
     == IntValue(1_267_650_600_228_229_401_496_703_205_376)
 }
 
-// ---------- whole programs ----------
+// ---------- whole programs of expressions ----------
 
 pub fn empty_program_test() {
   assert run("") == []
@@ -253,10 +267,143 @@ pub fn zero_to_negative_power_test() {
 }
 
 pub fn error_inside_larger_expression_test() {
-  // the error must bubble up from the inner division
   assert is_error("1 + 1 / 0")
 }
 
 pub fn error_stops_the_program_test() {
   assert is_error("1\n2 / 0\n3")
+}
+
+// ======================= slice A: variables =======================
+
+// ---------- let prints nothing ----------
+
+pub fn let_alone_prints_nothing_test() {
+  assert run("let x = 5") == []
+}
+
+pub fn two_lets_print_nothing_test() {
+  assert run("let a = 1\nlet b = 2") == []
+}
+
+// ---------- using variables ----------
+
+pub fn let_then_use_test() {
+  assert run("let x = 5\nx * 2") == [IntValue(10)]
+}
+
+pub fn variable_alone_test() {
+  assert run("let x = 5\nx") == [IntValue(5)]
+}
+
+pub fn float_variable_test() {
+  assert run("let pi = 3.5\npi * 2") == [FloatValue(7.0)]
+}
+
+pub fn int_and_float_variables_test() {
+  assert run("let x = 5\nlet y = x * 2.5\nx + y") == [FloatValue(17.5)]
+}
+
+pub fn variable_used_many_times_test() {
+  assert run("let x = 3\nx * x + x") == [IntValue(12)]
+}
+
+pub fn chain_of_lets_test() {
+  assert run("let a = 1\nlet b = a + 1\nlet c = b * 3\nc") == [IntValue(6)]
+}
+
+pub fn alias_test() {
+  assert run("let a = 5\nlet b = a\nb") == [IntValue(5)]
+}
+
+pub fn left_associativity_with_a_variable_test() {
+  assert run("let x = 10\nx - 4 - 3") == [IntValue(3)]
+}
+
+pub fn two_variables_test() {
+  assert run("let a = 2\nlet b = 3\na ** b") == [IntValue(8)]
+  assert run("let a = 2\nlet b = 3\n(a + b) * (a - b)") == [IntValue(-5)]
+}
+
+// ---------- types of variables follow their expression ----------
+
+pub fn division_makes_a_float_variable_test() {
+  assert run("let h = 7 / 2\nh") == [FloatValue(3.5)]
+}
+
+pub fn floor_division_keeps_an_int_variable_test() {
+  assert run("let q = 7 // 2\nq") == [IntValue(3)]
+}
+
+pub fn power_variable_test() {
+  assert run("let p = 2 ** 10\np") == [IntValue(1024)]
+}
+
+pub fn int_variable_in_true_division_test() {
+  assert run("let x = 5\nx / 2") == [FloatValue(2.5)]
+}
+
+pub fn negative_variable_floor_and_modulo_test() {
+  assert run("let m = -7\nm // 2") == [IntValue(-4)]
+  assert run("let m = -7\nm % 3") == [IntValue(2)]
+}
+
+pub fn power_chain_with_a_variable_test() {
+  assert run("let x = 2\nx ** 3 ** 2") == [IntValue(512)]
+}
+
+// ---------- negation of variables ----------
+
+pub fn negating_a_negative_variable_test() {
+  assert run("let n = -5\n-n") == [IntValue(5)]
+}
+
+pub fn negating_a_positive_variable_test() {
+  assert run("let n = 5\n-n") == [IntValue(-5)]
+}
+
+pub fn double_negation_of_a_variable_test() {
+  assert run("let a = 2\n--a") == [IntValue(2)]
+}
+
+// ---------- mixing statements ----------
+
+pub fn expressions_and_lets_interleaved_test() {
+  assert run("1\nlet x = 2\nx\n3") == [IntValue(1), IntValue(2), IntValue(3)]
+}
+
+pub fn several_outputs_after_lets_test() {
+  assert run("let x = 5\nlet y = x * 2.5\nx + y\ny - x")
+    == [FloatValue(17.5), FloatValue(7.5)]
+}
+
+pub fn comments_and_blank_lines_test() {
+  assert run("let x = 5 # five\n\nx") == [IntValue(5)]
+}
+
+// ---------- runtime errors with variables ----------
+
+pub fn let_expression_is_evaluated_immediately_test() {
+  // the division fails even though x is never used
+  assert is_error("let x = 1 / 0\n5")
+}
+
+pub fn division_by_a_zero_variable_test() {
+  assert is_error("let z = 0\n1 / z")
+}
+
+pub fn floor_division_by_a_zero_variable_test() {
+  assert is_error("let z = 0\n1 // z")
+}
+
+pub fn modulo_by_a_zero_float_variable_test() {
+  assert is_error("let z = 0.0\n1 % z")
+}
+
+pub fn error_after_a_let_stops_the_program_test() {
+  assert is_error("let x = 1\n2 / 0\nx")
+}
+
+pub fn error_inside_an_expression_with_a_variable_test() {
+  assert is_error("let a = 1\na + 1 / 0")
 }

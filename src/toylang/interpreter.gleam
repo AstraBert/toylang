@@ -1,3 +1,4 @@
+import gleam/dict
 import gleam/float
 import gleam/int
 import gleam/list
@@ -10,6 +11,9 @@ pub type RunValue {
   IntValue(Int)
   FloatValue(Float)
 }
+
+pub type Env =
+  dict.Dict(String, RunValue)
 
 pub type EvalError {
   EvalError(message: String)
@@ -156,27 +160,60 @@ pub fn apply(
   }
 }
 
-pub fn eval(expr: parser.Expr) -> Result(RunValue, EvalError) {
+pub fn eval(expr: parser.Expr, env: Env) -> Result(RunValue, EvalError) {
   case expr {
+    parser.Var(name, line, col) -> {
+      case dict.get(env, name) {
+        Ok(v) -> Ok(v)
+        Error(_) ->
+          Error(EvalError(
+            "Undefined variable "
+            <> name
+            <> " at line "
+            <> int.to_string(line)
+            <> " (col "
+            <> int.to_string(col)
+            <> ")",
+          ))
+      }
+    }
     parser.IntLit(i) -> Ok(IntValue(i))
     parser.FloatLit(f) -> Ok(FloatValue(f))
     parser.Neg(inner) -> {
-      use v <- result.try(eval(inner))
+      use v <- result.try(eval(inner, env))
       case v {
         IntValue(n) -> Ok(IntValue(-n))
         FloatValue(f) -> Ok(FloatValue(float.negate(f)))
       }
     }
     parser.BinOp(op, left, right) -> {
-      use l <- result.try(eval(left))
-      use r <- result.try(eval(right))
+      use l <- result.try(eval(left, env))
+      use r <- result.try(eval(right, env))
       apply(op, l, r)
     }
   }
 }
 
 pub fn eval_program(
-  exprs: List(parser.Expr),
+  exprs: List(parser.Stmt),
+  env: Env,
+  values: List(RunValue),
 ) -> Result(List(RunValue), EvalError) {
-  exprs |> list.try_map(eval)
+  case exprs {
+    [] -> Ok(list.reverse(values))
+    [first, ..rest] -> {
+      case first {
+        parser.ExprStmt(e) -> {
+          use val <- result.try(eval(e, env))
+          let values = [val, ..values]
+          eval_program(rest, env, values)
+        }
+        parser.Let(name, e, _, _) -> {
+          use val <- result.try(eval(e, env))
+          let env = dict.insert(env, name, val)
+          eval_program(rest, env, values)
+        }
+      }
+    }
+  }
 }
