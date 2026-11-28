@@ -1,0 +1,114 @@
+name: release
+
+# Push a tag like v0.1.0 to build and publish the four packages:
+#   toylang-0.1.0-linux-amd64.tar.gz    toylang-0.1.0-linux-arm64.tar.gz
+#   toylang-0.1.0-macos-amd64.tar.gz    toylang-0.1.0-macos-arm64.tar.gz
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  OTP_VERSION: "29"
+  GLEAM_VERSION: "1.19.2"
+
+jobs:
+  # 1. The escript is plain BEAM bytecode, the same on every OS and CPU,
+  #    so it is built once and shared by the four package jobs.
+  escript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Check that the tag matches gleam.toml
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TOML_VERSION="$(grep -m1 '^version' gleam.toml | cut -d'"' -f2)"
+          echo "tag: $TAG_VERSION, gleam.toml: $TOML_VERSION"
+          test "$TAG_VERSION" = "$TOML_VERSION"
+
+      - run: gleam deps download
+
+      # Replace this with the command you already use to make the escript.
+      # (This assumes the gleescript package, which writes ./toylang)
+      - name: Build the escript
+        run: gleam run -m gleescript
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: escript
+          path: toylang
+          if-no-files-found: error
+
+  # 2. The runtime is native code, so it is built on a runner of each kind.
+  package:
+    needs: escript
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: linux, arch: amd64, runner: ubuntu-latest }
+          - { os: linux, arch: arm64, runner: ubuntu-24.04-arm }
+          - { os: macos, arch: arm64, runner: macos-latest }
+          - { os: macos, arch: amd64, runner: macos-15-intel }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: escript
+          path: escript
+
+      - name: Build the runtime
+        run: cargo build --release --manifest-path runtime/Cargo.toml
+
+      - name: Assemble the package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NAME="toylang-${VERSION}-${{ matrix.os }}-${{ matrix.arch }}"
+          mkdir "$NAME"
+          # adjust the three source paths and the two names to match your script
+          cp toylang.sh "$NAME/toylang"
+          cp build.sh "$NAME/build.sh"
+          cp escript/toylang "$NAME/toylang.escript"
+          cp runtime/target/release/libruntime.a "$NAME/libruntime.a"
+          chmod +x "$NAME/toylang"
+          chmod +x "$NAME/build.sh"
+          tar -czf "$NAME.tar.gz" "$NAME"
+          shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+          ls -l "$NAME" "$NAME.tar.gz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os }}-${{ matrix.arch }}
+          path: toylang-*.tar.gz*
+          if-no-files-found: error
+
+  # 3. Collect the four packages and publish them on the GitHub release.
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: dist
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l dist
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
