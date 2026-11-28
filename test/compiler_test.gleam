@@ -1,16 +1,23 @@
+import gleam/dict
 import gleam/list
 import gleam/string
+import toylang/checker
 import toylang/compiler
 import toylang/lexer
 import toylang/parser
 
 // ---------- helpers (the only place that knows your function names) ----------
 
-// Lex + parse + compile a whole program to QBE text.
+// Lex + parse + check + compile a whole program to QBE text.
+// (The checker runs first, as it will in the real pipeline, so every test
+// program is also known to be valid. Delete that line if you prefer.)
 fn compile(source: String) -> String {
   let assert Ok(tokens) = lexer.lex(source)
-  let assert Ok(exprs) = parser.parse_program(tokens, [])
-  compiler.compile_program(exprs)
+  let assert Ok(stmts) = parser.parse_program(tokens, [])
+  let env: checker.Env = dict.new()
+  let assert Ok(_) = checker.check_program(stmts, env)
+  let assert Ok(compiled) = compiler.compile_program(stmts)
+  compiled
 }
 
 // Split into lines, trim each one and drop blank lines, so the tests don't
@@ -40,6 +47,8 @@ fn defined_temps(source: String) -> List(String) {
     }
   })
 }
+
+// ======================= v0: programs without variables =======================
 
 // ---------- program frame ----------
 
@@ -291,7 +300,7 @@ pub fn int_result_uses_int_print_test() {
   assert list.last(body("8 // 4")) == Ok("call $tl_print_int(l %t3)")
 }
 
-// ---------- several lines ----------
+// ---------- several lines of expressions ----------
 
 pub fn counter_continues_across_lines_test() {
   assert body("1\n2.5")
@@ -333,6 +342,179 @@ pub fn temps_are_unique_test() {
   // QBE temporaries can be assigned only once, so a repeated name is a bug.
   // This test doesn't depend on how you number them.
   let source = "1 + 2.5 * (3 ** 2) - 7 // 2 % 3 / 2\n-4 ** 2\n1 + 1\n2.5 - 1"
+  let temps = defined_temps(source)
+  assert list.length(list.unique(temps)) == list.length(temps)
+}
+
+// ======================= slice A: variables =======================
+
+// ---------- let emits only its expression, and prints nothing ----------
+
+pub fn let_alone_emits_only_its_expression_test() {
+  assert body("let x = 5") == ["%t1 =l copy 5"]
+}
+
+pub fn two_lets_print_nothing_test() {
+  assert body("let a = 1\nlet b = 2") == ["%t1 =l copy 1", "%t2 =l copy 2"]
+}
+
+pub fn let_with_a_float_test() {
+  assert body("let f = 2.5") == ["%t1 =d copy d_2.5"]
+}
+
+// ---------- a variable is the temporary that holds it (no code) ----------
+
+pub fn variable_alone_reuses_the_temp_test() {
+  assert body("let x = 5\nx")
+    == [
+      "%t1 =l copy 5",
+      "call $tl_print_int(l %t1)",
+    ]
+}
+
+pub fn float_variable_prints_as_float_test() {
+  assert body("let f = 2.5\nf")
+    == [
+      "%t1 =d copy d_2.5",
+      "call $tl_print_float(d %t1)",
+    ]
+}
+
+pub fn alias_shares_the_temp_test() {
+  // "let b = a" needs no instruction: b is just a's temporary
+  assert body("let a = 5\nlet b = a\nb")
+    == [
+      "%t1 =l copy 5",
+      "call $tl_print_int(l %t1)",
+    ]
+}
+
+pub fn variable_used_twice_test() {
+  assert body("let x = 3\nx * x")
+    == [
+      "%t1 =l copy 3",
+      "%t2 =l mul %t1, %t1",
+      "call $tl_print_int(l %t2)",
+    ]
+}
+
+// ---------- variables in expressions ----------
+
+pub fn variable_in_arithmetic_test() {
+  assert body("let x = 5\nx * 2")
+    == [
+      "%t1 =l copy 5",
+      "%t2 =l copy 2",
+      "%t3 =l mul %t1, %t2",
+      "call $tl_print_int(l %t3)",
+    ]
+}
+
+pub fn let_using_an_earlier_let_test() {
+  assert body("let a = 1\nlet b = a + 1\nb")
+    == [
+      "%t1 =l copy 1",
+      "%t2 =l copy 1",
+      "%t3 =l add %t1, %t2",
+      "call $tl_print_int(l %t3)",
+    ]
+}
+
+pub fn counter_continues_across_lets_test() {
+  assert body("let x = 1\nlet y = 2\nx + y")
+    == [
+      "%t1 =l copy 1",
+      "%t2 =l copy 2",
+      "%t3 =l add %t1, %t2",
+      "call $tl_print_int(l %t3)",
+    ]
+}
+
+pub fn negated_variable_test() {
+  assert body("let n = 5\n-n")
+    == [
+      "%t1 =l copy 5",
+      "%t2 =l neg %t1",
+      "call $tl_print_int(l %t2)",
+    ]
+}
+
+// ---------- the type of a variable follows its expression ----------
+
+pub fn int_variable_is_converted_next_to_a_float_test() {
+  assert body("let x = 5\nlet y = x * 2.5\nx + y")
+    == [
+      "%t1 =l copy 5",
+      "%t2 =d copy d_2.5",
+      "%t3 =d sltof %t1",
+      "%t4 =d mul %t3, %t2",
+      "%t5 =d sltof %t1",
+      "%t6 =d add %t5, %t4",
+      "call $tl_print_float(d %t6)",
+    ]
+}
+
+pub fn int_variable_in_true_division_test() {
+  assert body("let x = 7\nx / 2")
+    == [
+      "%t1 =l copy 7",
+      "%t2 =l copy 2",
+      "%t3 =d sltof %t1",
+      "%t4 =d sltof %t2",
+      "%t5 =d call $tl_div(d %t3, d %t4)",
+      "call $tl_print_float(d %t5)",
+    ]
+}
+
+pub fn float_variable_stays_a_float_test() {
+  // the variable is already a float: no conversion for it, only for the 2
+  assert body("let f = 2.5\nf * 2")
+    == [
+      "%t1 =d copy d_2.5",
+      "%t2 =l copy 2",
+      "%t3 =d sltof %t2",
+      "%t4 =d mul %t1, %t3",
+      "call $tl_print_float(d %t4)",
+    ]
+}
+
+pub fn variable_from_a_division_is_a_float_test() {
+  // h = 7 / 2 is a float, so printing h uses the float print function
+  assert list.last(body("let h = 7 / 2\nh"))
+    == Ok("call $tl_print_float(d %t5)")
+}
+
+pub fn variable_from_a_floor_division_is_an_int_test() {
+  assert list.last(body("let q = 7 // 2\nq")) == Ok("call $tl_print_int(l %t3)")
+}
+
+// ---------- mixing statements ----------
+
+pub fn expressions_and_lets_interleaved_test() {
+  assert body("1\nlet x = 2\nx\n3")
+    == [
+      "%t1 =l copy 1",
+      "call $tl_print_int(l %t1)",
+      "%t2 =l copy 2",
+      "call $tl_print_int(l %t2)",
+      "%t3 =l copy 3",
+      "call $tl_print_int(l %t3)",
+    ]
+}
+
+pub fn comments_and_blank_lines_with_a_let_test() {
+  assert body("let x = 5 # five\n\nx")
+    == [
+      "%t1 =l copy 5",
+      "call $tl_print_int(l %t1)",
+    ]
+}
+
+// ---------- property: every temporary is defined exactly once ----------
+
+pub fn temps_are_unique_with_variables_test() {
+  let source =
+    "let a = 1\nlet b = a + 2.5\nlet c = b * a - 7 // 2\nc + a\nb / a\n-c ** 2"
   let temps = defined_temps(source)
   assert list.length(list.unique(temps)) == list.length(temps)
 }

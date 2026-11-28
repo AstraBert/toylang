@@ -2,7 +2,7 @@
 
 The language is a calculator with Python flavour. A program is a list of lines; each line is one expression.
 
-### 2.1 Example programs
+### 1.1 Example programs
 
 ```
 1 + 2 * 3
@@ -13,7 +13,7 @@ The language is a calculator with Python flavour. A program is a list of lines; 
 -5 + 3.5
 ```
 
-### 2.2 Literals
+### 1.2 Literals
 
 | Kind | Rule | Valid | Invalid |
 | --- | --- | --- | --- |
@@ -22,7 +22,7 @@ The language is a calculator with Python flavour. A program is a list of lines; 
 
 Negative numbers are not literals. `-5` is the operator `-` applied to `5`.
 
-### 2.3 Operators
+### 1.3 Operators
 
 | Symbol | Meaning |
 | --- | --- |
@@ -35,17 +35,17 @@ Negative numbers are not literals. `-5` is the operator `-` applied to `5`.
 | `**` | power |
 | `( )` | grouping |
 
-### 2.4 Precedence (tightest first)
+### 1.4 Precedence (tightest first)
 
 1. `( )`
-2. `**` (right-associative: `2 ** 3 ** 2` means `2 ** (3 ** 2)`)
+1. `**` (right-associative: `2 ** 3 ** 2` means `2 ** (3 ** 2)`)
 3. unary `-`
 4. `*`  `/`  `//`  `%` (left-associative)
 5. `+`  `-` (left-associative)
 
 Note: `-2 ** 2` is `-(2 ** 2)`, which is `-4`, as in Python.
 
-### 2.5 Whitespace, newlines, comments
+### 1.5 Whitespace, newlines, comments
 
 - Spaces and tabs between tokens are ignored.
 - A newline ends a line and produces a `Newline` token.

@@ -24,6 +24,15 @@ pub type Expr {
   Neg(Expr)
   /// Binary operation
   BinOp(BinaryOp, Expr, Expr)
+  /// Variable declaration (name, line, col)
+  Var(String, Int, Int)
+}
+
+pub type Stmt {
+  /// An expression statement
+  ExprStmt(Expr)
+  /// A variable assignment statement (name, expression, line, column)
+  Let(String, Expr, Int, Int)
 }
 
 /// Parsing error
@@ -64,6 +73,7 @@ pub fn parse_atom(
     [] -> Error(Empty)
     [first, ..rest] -> {
       case first.kind {
+        lexer.Ident(n) -> Ok(#(Var(n, first.line, first.col), rest))
         lexer.IntNum(n) -> Ok(#(IntLit(n), rest))
         lexer.FloatNum(n) -> Ok(#(FloatLit(n), rest))
         lexer.LParen -> {
@@ -92,6 +102,64 @@ pub fn parse_atom(
             col: first.col,
             line: first.line,
           ))
+      }
+    }
+  }
+}
+
+fn expect_ident(
+  tokens: List(lexer.Token),
+) -> Result(#(String, Int, Int, List(lexer.Token)), ParseError) {
+  case tokens {
+    [lexer.Token(kind: lexer.Ident(x), line: l, col: c), ..rest] -> {
+      Ok(#(x, l, c, rest))
+    }
+    [other, ..] ->
+      Error(Parsing(
+        message: "Unexpected token after 'let' (expecting variable declaration): "
+          <> other.kind |> lexer.to_string,
+        col: other.col,
+        line: other.line,
+      ))
+    [] -> Error(Empty)
+  }
+}
+
+fn expect_eq(
+  tokens: List(lexer.Token),
+) -> Result(List(lexer.Token), ParseError) {
+  case tokens {
+    [lexer.Token(kind: lexer.Eq, line: _, col: _), ..rest] -> {
+      Ok(rest)
+    }
+    [other, ..] ->
+      Error(Parsing(
+        message: "Unexpected token after 'let' and variable declaration (expecting '='): "
+          <> other.kind |> lexer.to_string,
+        col: other.col,
+        line: other.line,
+      ))
+    [] -> Error(Empty)
+  }
+}
+
+pub fn parse_stmt(
+  tokens: List(lexer.Token),
+) -> Result(#(Stmt, List(lexer.Token)), ParseError) {
+  case tokens {
+    [] -> Error(Empty)
+    [first, ..rest] -> {
+      case first.kind {
+        lexer.Let -> {
+          use #(name, line, col, other) <- result.try(expect_ident(rest))
+          use more_rest <- result.try(expect_eq(other))
+          use #(expr, final_rest) <- result.try(parse_expr(more_rest))
+          Ok(#(Let(name, expr, line, col), final_rest))
+        }
+        _ -> {
+          use #(expr, more) <- result.try(parse_expr(tokens))
+          Ok(#(ExprStmt(expr), more))
+        }
       }
     }
   }
@@ -164,20 +232,20 @@ pub fn expr_loop(
 
 pub fn parse_program(
   tokens: List(lexer.Token),
-  exprs: List(Expr),
-) -> Result(List(Expr), ParseError) {
+  stmts: List(Stmt),
+) -> Result(List(Stmt), ParseError) {
   case tokens {
     [lexer.Token(kind: lexer.EOF, col: _, line: _), ..] ->
-      Ok(list.reverse(exprs))
+      Ok(list.reverse(stmts))
     [lexer.Token(kind: lexer.Newline, col: _, line: _), ..rest] ->
-      parse_program(rest, exprs)
+      parse_program(rest, stmts)
     _ -> {
-      use #(expr, rest) <- result.try(parse_expr(tokens))
+      use #(stmt, rest) <- result.try(parse_stmt(tokens))
       case rest {
         [lexer.Token(kind: lexer.Newline, col: _, line: _), ..]
         | [lexer.Token(kind: lexer.EOF, col: _, line: _), ..] -> {
-          let exprs = [expr, ..exprs]
-          parse_program(rest, exprs)
+          let stmts = [stmt, ..stmts]
+          parse_program(rest, stmts)
         }
         _ -> {
           let first = rest |> list.first

@@ -1,18 +1,20 @@
+import gleam/dict
 import gleam/float
 import gleam/int
 import gleam/list
+import gleam/result
 import gleam/string
 import toylang/parser
+import toylang/types
 
-pub type CompileType {
-  IntType
-  FloatType
-}
+/// Variable Name -> (Temporary Name, Type)
+pub type VarEnv =
+  dict.Dict(String, #(String, types.ToyType))
 
-pub fn to_qbe_type(ct: CompileType) -> String {
+pub fn to_qbe_type(ct: types.ToyType) -> String {
   case ct {
-    IntType -> "l"
-    FloatType -> "d"
+    types.IntType -> "l"
+    types.FloatType -> "d"
   }
 }
 
@@ -22,15 +24,15 @@ pub type CompileError {
 
 pub fn work_type(
   op: parser.BinaryOp,
-  left_type: CompileType,
-  right_type: CompileType,
-) -> CompileType {
+  left_type: types.ToyType,
+  right_type: types.ToyType,
+) -> types.ToyType {
   case op {
-    parser.Div -> FloatType
+    parser.Div -> types.FloatType
     _ -> {
       case left_type, right_type {
-        IntType, IntType -> IntType
-        _, _ -> FloatType
+        types.IntType, types.IntType -> types.IntType
+        _, _ -> types.FloatType
       }
     }
   }
@@ -38,13 +40,13 @@ pub fn work_type(
 
 pub fn convert(
   t: String,
-  from_type: CompileType,
-  to_type: CompileType,
+  from_type: types.ToyType,
+  to_type: types.ToyType,
   n: Int,
 ) -> #(List(String), String, Int) {
   case from_type, to_type {
-    IntType, IntType -> #([], t, n)
-    FloatType, FloatType -> #([], t, n)
+    types.IntType, types.IntType -> #([], t, n)
+    types.FloatType, types.FloatType -> #([], t, n)
     _, _ -> {
       let n1 = n + 1
       let r = "%t" <> int.to_string(n1)
@@ -58,7 +60,7 @@ pub fn convert(
 
 pub fn emit_op(
   op: parser.BinaryOp,
-  wtype: CompileType,
+  wtype: types.ToyType,
   result: String,
   a: String,
   b: String,
@@ -79,8 +81,8 @@ pub fn emit_op(
     }
     parser.FloorDiv -> {
       let floor_div_tp = case wtype {
-        IntType -> "int"
-        FloatType -> "float"
+        types.IntType -> "int"
+        types.FloatType -> "float"
       }
       result
       <> " ="
@@ -99,8 +101,8 @@ pub fn emit_op(
     }
     parser.Mod -> {
       let mod_tp = case wtype {
-        IntType -> "int"
-        FloatType -> "float"
+        types.IntType -> "int"
+        types.FloatType -> "float"
       }
       result
       <> " ="
@@ -119,8 +121,8 @@ pub fn emit_op(
     }
     parser.Pow -> {
       let pow_tp = case wtype {
-        IntType -> "int"
-        FloatType -> "float"
+        types.IntType -> "int"
+        types.FloatType -> "float"
       }
       result
       <> " ="
@@ -143,30 +145,48 @@ pub fn emit_op(
 pub fn compile_expr(
   expr: parser.Expr,
   n: Int,
-) -> #(List(String), String, CompileType, Int) {
+  var_env: VarEnv,
+) -> Result(#(List(String), String, types.ToyType, Int), CompileError) {
   case expr {
+    parser.Var(name, line, col) -> {
+      case dict.get(var_env, name) {
+        Ok(#(temp, tp)) -> {
+          Ok(#([], temp, tp, n))
+        }
+        Error(_) ->
+          Error(CompileError(
+            "Undefined variable "
+            <> name
+            <> " at line "
+            <> int.to_string(line)
+            <> " (col "
+            <> int.to_string(col)
+            <> ")",
+          ))
+      }
+    }
     parser.IntLit(k) -> {
       let n1 = n + 1
       let t = "%t" <> int.to_string(n1)
       let lines = [t <> " =l copy " <> int.to_string(k)]
-      #(lines, t, IntType, n1)
+      Ok(#(lines, t, types.IntType, n1))
     }
     parser.FloatLit(k) -> {
       let n1 = n + 1
       let t = "%t" <> int.to_string(n1)
       let lines = [t <> " =d copy d_" <> float.to_string(k)]
-      #(lines, t, FloatType, n1)
+      Ok(#(lines, t, types.FloatType, n1))
     }
     parser.Neg(inner) -> {
-      let #(lines, t, ty, n1) = compile_expr(inner, n)
+      use #(lines, t, ty, n1) <- result.try(compile_expr(inner, n, var_env))
       let n2 = n1 + 1
       let t1 = "%t" <> int.to_string(n2)
       let line = t1 <> " =" <> to_qbe_type(ty) <> " neg " <> t
-      #(lines |> list.append([line]), t1, ty, n2)
+      Ok(#(lines |> list.append([line]), t1, ty, n2))
     }
     parser.BinOp(op, left, right) -> {
-      let #(l_lines, lt, lty, n1) = compile_expr(left, n)
-      let #(r_lines, rt, rty, n2) = compile_expr(right, n1)
+      use #(l_lines, lt, lty, n1) <- result.try(compile_expr(left, n, var_env))
+      use #(r_lines, rt, rty, n2) <- result.try(compile_expr(right, n1, var_env))
       let wt = work_type(op, lty, rty)
       let #(l_conv, lt2, n3) = convert(lt, lty, wt, n2)
       let #(r_conv, rt2, n4) = convert(rt, rty, wt, n3)
@@ -179,46 +199,62 @@ pub fn compile_expr(
         |> list.append(l_conv)
         |> list.append(r_conv)
         |> list.append([op_line])
-      #(lines, r, wt, n5)
+      Ok(#(lines, r, wt, n5))
     }
   }
 }
 
 fn compile_program_to_lines(
-  exprs: List(parser.Expr),
+  exprs: List(parser.Stmt),
   lines: List(String),
   n: Int,
-) -> List(String) {
+  var_env: VarEnv,
+) -> Result(List(String), CompileError) {
   case exprs {
     [] -> {
-      lines |> list.append(["ret 0", "}", "\n"])
+      Ok(lines |> list.append(["ret 0", "}", "\n"]))
     }
     [first, ..rest] -> {
-      let #(expr_lines, t, ty, n1) = compile_expr(first, n)
-      let print_tp = case ty {
-        IntType -> "int"
-        FloatType -> "float"
+      case first {
+        parser.ExprStmt(e) -> {
+          use #(expr_lines, t, ty, n1) <- result.try(compile_expr(e, n, var_env))
+          let print_tp = case ty {
+            types.IntType -> "int"
+            types.FloatType -> "float"
+          }
+          let print_line =
+            "call $tl_print_"
+            <> print_tp
+            <> "("
+            <> to_qbe_type(ty)
+            <> " "
+            <> t
+            <> ")"
+          let lines =
+            lines |> list.append(expr_lines) |> list.append([print_line])
+          compile_program_to_lines(rest, lines, n1, var_env)
+        }
+        parser.Let(name, e, _, _) -> {
+          // no print line for variable declarations
+          use #(expr_lines, t, ty, n1) <- result.try(compile_expr(e, n, var_env))
+          let lines = lines |> list.append(expr_lines)
+          let var_env = dict.insert(var_env, name, #(t, ty))
+          compile_program_to_lines(rest, lines, n1, var_env)
+        }
       }
-      let print_line =
-        "call $tl_print_"
-        <> print_tp
-        <> "("
-        <> to_qbe_type(ty)
-        <> " "
-        <> t
-        <> ")"
-      let lines = lines |> list.append(expr_lines) |> list.append([print_line])
-      compile_program_to_lines(rest, lines, n1)
     }
   }
 }
 
-pub fn compile_program(exprs: List(parser.Expr)) -> String {
-  let lines =
-    compile_program_to_lines(
-      exprs,
-      ["export function w $main() {", "@start"],
-      0,
-    )
-  lines |> string.join("\n")
+pub fn compile_program(
+  stmts: List(parser.Stmt),
+) -> Result(String, CompileError) {
+  let var_env: VarEnv = dict.new()
+  use lines <- result.try(compile_program_to_lines(
+    stmts,
+    ["export function w $main() {", "@start"],
+    0,
+    var_env,
+  ))
+  Ok(lines |> string.join("\n"))
 }

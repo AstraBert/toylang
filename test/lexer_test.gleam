@@ -1,5 +1,6 @@
 import gleam/list
 import gleam/result
+import gleam/string
 import gleeunit
 import toylang/lexer.{
   EOF, FloatNum, IntNum, LParen, Minus, Newline, Percent, Plus, RParen, Slash,
@@ -101,6 +102,35 @@ pub fn read_number_returns_correct_rest_on_float_test() {
       assert rest == ["*", "5", ".", "8"]
     }
   }
+}
+
+// ---------- is_valid_variable_name ----------
+
+pub fn valid_variable_names_test() {
+  let cases = [
+    "_hello" |> string.to_graphemes,
+    "s_1omething3" |> string.to_graphemes,
+    "onlyletters" |> string.to_graphemes,
+    ["_"],
+    ["_", "_"],
+    "_123" |> string.to_graphemes,
+  ]
+
+  assert cases |> list.all(lexer.is_valid_variable_name)
+}
+
+pub fn invalid_variable_names_test() {
+  let cases = [
+    "1_hello" |> string.to_graphemes,
+    "-something" |> string.to_graphemes,
+    "with space" |> string.to_graphemes,
+    ["#"],
+    ["玩", "具"],
+    "_12\t3" |> string.to_graphemes,
+    "with\rp" |> string.to_graphemes,
+  ]
+
+  assert cases |> list.all(fn(x) { !lexer.is_valid_variable_name(x) })
 }
 
 // ---------- helpers ----------
@@ -210,6 +240,25 @@ pub fn only_comment_test() {
 
 pub fn comment_keeps_newline_test() {
   assert kinds("1 # hi\n2") == [IntNum(1), Newline, IntNum(2), EOF]
+}
+
+pub fn comment_before_unix_line_ending_test() {
+  // 1=col 1, newline=col 7, then the 2 on line 2 (not line 3)
+  assert positions("1 # hi\n2") == [#(1, 1), #(1, 7), #(2, 1), #(2, 2)]
+}
+
+pub fn comment_before_windows_line_ending_test() {
+  // "\r\n" is one grapheme and must also end the comment
+  assert kinds("1 # hi\r\n2") == [IntNum(1), Newline, IntNum(2), EOF]
+}
+
+pub fn comment_before_windows_line_ending_positions_test() {
+  assert positions("1 # hi\r\n2") == [#(1, 1), #(1, 7), #(2, 1), #(2, 2)]
+}
+
+pub fn comment_at_end_of_input_test() {
+  // EOF stays on the same line, right after the comment
+  assert positions("1 # hi") == [#(1, 1), #(1, 7)]
 }
 
 // ---------- positions ----------
