@@ -36,10 +36,8 @@ jobs:
 
       - run: gleam deps download
 
-      # Replace this with the command you already use to make the escript.
-      # (This assumes the gleescript package, which writes ./toylang)
       - name: Build the escript
-        run: gleam run -m gleescript
+        run: gleam export escript
 
       - uses: actions/upload-artifact@v4
         with:
